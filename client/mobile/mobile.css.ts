@@ -184,11 +184,20 @@ export const MOBILE_CSS = `
     padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
-  /* 主内容列（第 2 个网格子元素）在官方样式里有显式 grid-column: 2——
+  /* 主内容列（CenterColumn）在官方样式里有显式 grid-column: 2——
      网格被压缩成 [1fr, 0, 0] 后它会落在 0px 的第 2 轨，整个主界面被挤出
      视口（只剩背景图）。必须显式把它拉回第 1 轨（issue #5）。
-     第 3 列（details）保持 0 轨即可，无需处理。 */
-  [data-mobile-nav="frame"] > :nth-child(2) {
+     第 3 列（details）保持 0 轨即可，无需处理。
+
+     定位方式（issue #208 / #209）：按官方类名子串，不能按子元素序号。
+     CSS Modules 类名形如 mP3x-q_centerCol：哈希前缀每次构建都会变，后缀
+     centerCol 稳定，且用不带哈希分隔符的 [class*="centerCol"] 与类名拼法
+     （[hash]_[local] / [local]_[hash]）无关。背景：DSH 0.2.2 起 AppFrame
+     在窄屏自带抽屉，并在 frame 里插入 div[data-sidebar-mask] 作为第一个
+     子元素；序号定位随之错位 —— > :nth-child(2) 从主内容列变成侧边栏列，
+     真正的主列留在官方 grid-column: 2 的 0px 轨道，手机上整个会话界面
+     白屏（只剩背景）。 */
+  [data-mobile-nav="frame"] > [class*="centerCol"] {
     grid-column: 1 !important;
     grid-row: 1 !important;
     min-width: 0 !important;
@@ -216,8 +225,14 @@ export const MOBILE_CSS = `
      details pane 1000 and its full-screen frame ::after mask 1050 (issue
      #67: that mask sat on top of the 600 drawer and ate every tap). Still
      far under the fixed-position banners/toasts (z 9999) that float at the
-     viewport level. */
-  [data-mobile-nav="frame"] > :first-child {
+     viewport level.
+
+     DSH 0.2.2 起也不能再按「第几个子元素」定位（issue #208 / #209）：
+     官方在窄屏把 div[data-sidebar-mask] 插为 frame 的第一个子元素，
+     :first-child 会命中遮罩，真正被拉成抽屉的侧边栏列（..._sidebarCol）
+     反而留在网格里。这里按官方类名子串定位（哈希前缀每次构建都会变，
+     sidebarCol 后缀稳定）。 */
+  [data-mobile-nav="frame"] > [class*="sidebarCol"] {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
     width: max-content !important;
@@ -247,8 +262,17 @@ export const MOBILE_CSS = `
      overflow:hidden drawer to scrollLeft=102, and every static child (plus the
      fixed overlay) shifts 102px off-screen. With transform:none the overlay is
      viewport-anchored: it dims the full screen and the sheet sits at left:8. */
-  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > :first-child {
+  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > [class*="sidebarCol"] {
     transform: none !important;
+  }
+
+  /* DSH 0.2.2 的自带抽屉还自带一层可点击遮罩（div[data-sidebar-mask]）：
+     点它会调 toggleSidebar()，而本插件在 document 捕获阶段也会关抽屉 ——
+     一次点击 toggle 两次，抽屉关了又弹回，看起来「关不掉」。插件已有自己的
+     backdrop + 抽屉外点击逻辑，直接屏蔽官方这层；语义与下面屏蔽
+     web-ui-all 的 ::after 遮罩（issue #67）一致。 */
+  [data-mobile-nav="frame"] > [data-sidebar-mask] {
+    display: none !important;
   }
 
   /* Kill a competing full-screen mask (issue #67).
@@ -433,6 +457,15 @@ export const MOBILE_CSS = `
     left: 8px !important;
     top: 12px !important;
     z-index: 2 !important;
+  }
+  /* DSH 0.2.2 在 frame 的 leading 座自带开合按钮（button[data-sidebar-opener]，
+     drawer 模式下每个 phase 都挂载）：位置和功能都与本插件自绘的 header
+     toggle / 悬浮球重合，同一屏会出现三个入口。宿主有官方按钮时插件这两个
+     入口让位；用 :has() 门控，老宿主（没有官方按钮）仍保留兜底入口 ——
+     悬浮球还是那种宿主上 hero 页唯一的入口（那里没有 session header）。 */
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="toggle"],
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="fab"] {
+    display: none !important;
   }
   /* The Files action sits at the FAR RIGHT of the header so it reads as a
      distinct control from the directory toggle on the left (which opens

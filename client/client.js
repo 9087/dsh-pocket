@@ -217,8 +217,8 @@ var import_react = require("react");
 var primitives2 = __toESM(require("@deepseek-ai/dsh-client-ui-primitives"), 1);
 
 // client/mobile/nav-targets.mjs
-var DRAWER_SELECTOR = '[data-mobile-nav="frame"] > :first-child';
-var TOGGLE_SELECTOR = '[data-mobile-nav="toggle"]';
+var DRAWER_SELECTOR = '[data-mobile-nav="frame"] > [class*="sidebarCol"]';
+var TOGGLE_SELECTOR = '[data-mobile-nav="toggle"], [data-sidebar-opener]';
 var NAV_TARGETS = [
   "button[data-dsh-taskboard-entry]",
   "button[data-dsh-ssh-entry]",
@@ -813,11 +813,20 @@ var MOBILE_CSS = `
     padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
-  /* \u4E3B\u5185\u5BB9\u5217\uFF08\u7B2C 2 \u4E2A\u7F51\u683C\u5B50\u5143\u7D20\uFF09\u5728\u5B98\u65B9\u6837\u5F0F\u91CC\u6709\u663E\u5F0F grid-column: 2\u2014\u2014
+  /* \u4E3B\u5185\u5BB9\u5217\uFF08CenterColumn\uFF09\u5728\u5B98\u65B9\u6837\u5F0F\u91CC\u6709\u663E\u5F0F grid-column: 2\u2014\u2014
      \u7F51\u683C\u88AB\u538B\u7F29\u6210 [1fr, 0, 0] \u540E\u5B83\u4F1A\u843D\u5728 0px \u7684\u7B2C 2 \u8F68\uFF0C\u6574\u4E2A\u4E3B\u754C\u9762\u88AB\u6324\u51FA
      \u89C6\u53E3\uFF08\u53EA\u5269\u80CC\u666F\u56FE\uFF09\u3002\u5FC5\u987B\u663E\u5F0F\u628A\u5B83\u62C9\u56DE\u7B2C 1 \u8F68\uFF08issue #5\uFF09\u3002
-     \u7B2C 3 \u5217\uFF08details\uFF09\u4FDD\u6301 0 \u8F68\u5373\u53EF\uFF0C\u65E0\u9700\u5904\u7406\u3002 */
-  [data-mobile-nav="frame"] > :nth-child(2) {
+     \u7B2C 3 \u5217\uFF08details\uFF09\u4FDD\u6301 0 \u8F68\u5373\u53EF\uFF0C\u65E0\u9700\u5904\u7406\u3002
+
+     \u5B9A\u4F4D\u65B9\u5F0F\uFF08issue #208 / #209\uFF09\uFF1A\u6309\u5B98\u65B9\u7C7B\u540D\u5B50\u4E32\uFF0C\u4E0D\u80FD\u6309\u5B50\u5143\u7D20\u5E8F\u53F7\u3002
+     CSS Modules \u7C7B\u540D\u5F62\u5982 mP3x-q_centerCol\uFF1A\u54C8\u5E0C\u524D\u7F00\u6BCF\u6B21\u6784\u5EFA\u90FD\u4F1A\u53D8\uFF0C\u540E\u7F00
+     centerCol \u7A33\u5B9A\uFF0C\u4E14\u7528\u4E0D\u5E26\u54C8\u5E0C\u5206\u9694\u7B26\u7684 [class*="centerCol"] \u4E0E\u7C7B\u540D\u62FC\u6CD5
+     \uFF08[hash]_[local] / [local]_[hash]\uFF09\u65E0\u5173\u3002\u80CC\u666F\uFF1ADSH 0.2.2 \u8D77 AppFrame
+     \u5728\u7A84\u5C4F\u81EA\u5E26\u62BD\u5C49\uFF0C\u5E76\u5728 frame \u91CC\u63D2\u5165 div[data-sidebar-mask] \u4F5C\u4E3A\u7B2C\u4E00\u4E2A
+     \u5B50\u5143\u7D20\uFF1B\u5E8F\u53F7\u5B9A\u4F4D\u968F\u4E4B\u9519\u4F4D \u2014\u2014 > :nth-child(2) \u4ECE\u4E3B\u5185\u5BB9\u5217\u53D8\u6210\u4FA7\u8FB9\u680F\u5217\uFF0C
+     \u771F\u6B63\u7684\u4E3B\u5217\u7559\u5728\u5B98\u65B9 grid-column: 2 \u7684 0px \u8F68\u9053\uFF0C\u624B\u673A\u4E0A\u6574\u4E2A\u4F1A\u8BDD\u754C\u9762
+     \u767D\u5C4F\uFF08\u53EA\u5269\u80CC\u666F\uFF09\u3002 */
+  [data-mobile-nav="frame"] > [class*="centerCol"] {
     grid-column: 1 !important;
     grid-row: 1 !important;
     min-width: 0 !important;
@@ -845,8 +854,14 @@ var MOBILE_CSS = `
      details pane 1000 and its full-screen frame ::after mask 1050 (issue
      #67: that mask sat on top of the 600 drawer and ate every tap). Still
      far under the fixed-position banners/toasts (z 9999) that float at the
-     viewport level. */
-  [data-mobile-nav="frame"] > :first-child {
+     viewport level.
+
+     DSH 0.2.2 \u8D77\u4E5F\u4E0D\u80FD\u518D\u6309\u300C\u7B2C\u51E0\u4E2A\u5B50\u5143\u7D20\u300D\u5B9A\u4F4D\uFF08issue #208 / #209\uFF09\uFF1A
+     \u5B98\u65B9\u5728\u7A84\u5C4F\u628A div[data-sidebar-mask] \u63D2\u4E3A frame \u7684\u7B2C\u4E00\u4E2A\u5B50\u5143\u7D20\uFF0C
+     :first-child \u4F1A\u547D\u4E2D\u906E\u7F69\uFF0C\u771F\u6B63\u88AB\u62C9\u6210\u62BD\u5C49\u7684\u4FA7\u8FB9\u680F\u5217\uFF08..._sidebarCol\uFF09
+     \u53CD\u800C\u7559\u5728\u7F51\u683C\u91CC\u3002\u8FD9\u91CC\u6309\u5B98\u65B9\u7C7B\u540D\u5B50\u4E32\u5B9A\u4F4D\uFF08\u54C8\u5E0C\u524D\u7F00\u6BCF\u6B21\u6784\u5EFA\u90FD\u4F1A\u53D8\uFF0C
+     sidebarCol \u540E\u7F00\u7A33\u5B9A\uFF09\u3002 */
+  [data-mobile-nav="frame"] > [class*="sidebarCol"] {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
     width: max-content !important;
@@ -876,8 +891,17 @@ var MOBILE_CSS = `
      overflow:hidden drawer to scrollLeft=102, and every static child (plus the
      fixed overlay) shifts 102px off-screen. With transform:none the overlay is
      viewport-anchored: it dims the full screen and the sheet sits at left:8. */
-  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > :first-child {
+  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > [class*="sidebarCol"] {
     transform: none !important;
+  }
+
+  /* DSH 0.2.2 \u7684\u81EA\u5E26\u62BD\u5C49\u8FD8\u81EA\u5E26\u4E00\u5C42\u53EF\u70B9\u51FB\u906E\u7F69\uFF08div[data-sidebar-mask]\uFF09\uFF1A
+     \u70B9\u5B83\u4F1A\u8C03 toggleSidebar()\uFF0C\u800C\u672C\u63D2\u4EF6\u5728 document \u6355\u83B7\u9636\u6BB5\u4E5F\u4F1A\u5173\u62BD\u5C49 \u2014\u2014
+     \u4E00\u6B21\u70B9\u51FB toggle \u4E24\u6B21\uFF0C\u62BD\u5C49\u5173\u4E86\u53C8\u5F39\u56DE\uFF0C\u770B\u8D77\u6765\u300C\u5173\u4E0D\u6389\u300D\u3002\u63D2\u4EF6\u5DF2\u6709\u81EA\u5DF1\u7684
+     backdrop + \u62BD\u5C49\u5916\u70B9\u51FB\u903B\u8F91\uFF0C\u76F4\u63A5\u5C4F\u853D\u5B98\u65B9\u8FD9\u5C42\uFF1B\u8BED\u4E49\u4E0E\u4E0B\u9762\u5C4F\u853D
+     web-ui-all \u7684 ::after \u906E\u7F69\uFF08issue #67\uFF09\u4E00\u81F4\u3002 */
+  [data-mobile-nav="frame"] > [data-sidebar-mask] {
+    display: none !important;
   }
 
   /* Kill a competing full-screen mask (issue #67).
@@ -1062,6 +1086,15 @@ var MOBILE_CSS = `
     left: 8px !important;
     top: 12px !important;
     z-index: 2 !important;
+  }
+  /* DSH 0.2.2 \u5728 frame \u7684 leading \u5EA7\u81EA\u5E26\u5F00\u5408\u6309\u94AE\uFF08button[data-sidebar-opener]\uFF0C
+     drawer \u6A21\u5F0F\u4E0B\u6BCF\u4E2A phase \u90FD\u6302\u8F7D\uFF09\uFF1A\u4F4D\u7F6E\u548C\u529F\u80FD\u90FD\u4E0E\u672C\u63D2\u4EF6\u81EA\u7ED8\u7684 header
+     toggle / \u60AC\u6D6E\u7403\u91CD\u5408\uFF0C\u540C\u4E00\u5C4F\u4F1A\u51FA\u73B0\u4E09\u4E2A\u5165\u53E3\u3002\u5BBF\u4E3B\u6709\u5B98\u65B9\u6309\u94AE\u65F6\u63D2\u4EF6\u8FD9\u4E24\u4E2A
+     \u5165\u53E3\u8BA9\u4F4D\uFF1B\u7528 :has() \u95E8\u63A7\uFF0C\u8001\u5BBF\u4E3B\uFF08\u6CA1\u6709\u5B98\u65B9\u6309\u94AE\uFF09\u4ECD\u4FDD\u7559\u515C\u5E95\u5165\u53E3 \u2014\u2014
+     \u60AC\u6D6E\u7403\u8FD8\u662F\u90A3\u79CD\u5BBF\u4E3B\u4E0A hero \u9875\u552F\u4E00\u7684\u5165\u53E3\uFF08\u90A3\u91CC\u6CA1\u6709 session header\uFF09\u3002 */
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="toggle"],
+  [data-mobile-nav="frame"]:has([data-sidebar-opener]) [data-mobile-nav="fab"] {
+    display: none !important;
   }
   /* The Files action sits at the FAR RIGHT of the header so it reads as a
      distinct control from the directory toggle on the left (which opens

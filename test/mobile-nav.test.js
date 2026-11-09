@@ -84,8 +84,8 @@ test('浮层内的点击被识别为 overlay（不该关抽屉）—— issue #7
 
 test('选择器常量与 MobileNavOverlay 的用法保持一致', () => {
   const src = readFileSync(new URL('../client/mobile/MobileNavOverlay.tsx', import.meta.url), 'utf8');
-  assert.equal(DRAWER_SELECTOR, '[data-mobile-nav="frame"] > :first-child');
-  assert.equal(TOGGLE_SELECTOR, '[data-mobile-nav="toggle"]');
+  assert.equal(DRAWER_SELECTOR, '[data-mobile-nav="frame"] > [class*="sidebarCol"]');
+  assert.equal(TOGGLE_SELECTOR, '[data-mobile-nav="toggle"], [data-sidebar-opener]');
   assert.ok(
     src.includes("document.querySelector<HTMLElement>(DRAWER_SELECTOR)"),
     '抽屉查询应复用 DRAWER_SELECTOR，避免与 CSS 里的选择器漂移',
@@ -126,7 +126,7 @@ test('抽屉层级压过 dsh-web-ui-all 的移动端遮罩 —— issue #67', ()
   // web-ui-all 0.3.6 的移动端响应式：sidebar pane 1100 / details pane 1000 /
   // frame ::after 全屏遮罩 1050。抽屉必须高于 1100，否则那层遮罩会盖在抽屉
   // 上吃掉每一次点击 —— 抽屉能开，但里面什么都点不动，页面也滚不了。
-  const drawerBlock = css.slice(css.indexOf('> :first-child {'));
+  const drawerBlock = css.slice(css.indexOf('> [class*="sidebarCol"] {'));
   const z = drawerBlock.match(/z-index:\s*(\d+)\s*!/);
   assert.ok(z, '抽屉必须显式声明 z-index !important');
   assert.ok(
@@ -134,6 +134,69 @@ test('抽屉层级压过 dsh-web-ui-all 的移动端遮罩 —— issue #67', ()
     `抽屉 z-index ${z[1]} 压不过 web-ui-all 的 1100 sidebar pane / 1050 遮罩`,
   );
   assert.ok(Number(z[1]) < 9999, `抽屉 z-index ${z[1]} 不该盖住视口级 banner/toast（9999）`);
+});
+
+test('DSH 0.2.2 自带抽屉：按类名定位，不再用子元素序号 —— issue #208 / #209', () => {
+  const css = readFileSync(new URL('../client/mobile/mobile.css.ts', import.meta.url), 'utf8');
+  // 0.2.2 的 AppFrame 在窄屏自带抽屉，并把 div[data-sidebar-mask] 插成 frame 的
+  // 第一个子元素。位置选择器随之错位：> :first-child 命中遮罩、
+  // > :nth-child(2) 命中侧边栏列，主内容列留在 0px 的第 2 轨 —— 手机上的会话
+  // 界面整片白屏（只剩背景），加 ?dsh-layout=desktop 才正常。
+  assert.ok(
+    /\[data-mobile-nav="frame"\]\s*>\s*\[class\*="centerCol"\]\s*\{[^}]*grid-column:\s*1\s*!/.test(css),
+    '主内容列必须按类名（centerCol）拉回第 1 轨，不能按子元素序号',
+  );
+  assert.ok(
+    /\[data-mobile-nav="frame"\]\s*>\s*\[class\*="sidebarCol"\]\s*\{[^}]*position:\s*absolute\s*!/.test(css),
+    '抽屉必须按类名（sidebarCol）定位，不能按子元素序号',
+  );
+  assert.ok(
+    css.includes('[class*="sidebarCol"]'),
+    'CSS 的抽屉列选择器必须与 DRAWER_SELECTOR 使用同一套类名定位，避免漂移',
+  );
+  // 类名后缀不带下划线：CSS Modules 的 hash 分隔符一变（[hash]_[local] →
+  // [local]_[hash] 之类），带下划线的匹配就失效；只锚定组件名后缀最稳
+  // （issue #207 / #208 的建议，真机实测同样命中）。
+  assert.ok(!css.includes('class*="_centerCol"'), '不能用带下划线的类名后缀 _centerCol');
+  assert.ok(!css.includes('class*="_sidebarCol"'), '不能用带下划线的类名后缀 _sidebarCol');
+  // frame 上不许再出现位置选择器：官方以后再加/挪节点又会错位。
+  assert.ok(
+    !/\[data-mobile-nav="frame"\][^{]*>\s*:first-child\s*[,{]/.test(css)
+      && !/\[data-mobile-nav="frame"\][^{]*>\s*:nth-child\(\d+\)\s*[,{]/.test(css),
+    'frame 的布局规则不许再用 > :first-child / > :nth-child(N)',
+  );
+  // 官方遮罩点击会调 toggleSidebar()，插件在 document 捕获阶段也会关抽屉：
+  // 一次点击 toggle 两次，抽屉关了又弹回，看起来「关不掉」。
+  assert.ok(
+    /\[data-mobile-nav="frame"\]\s*>\s*\[data-sidebar-mask\]\s*\{[^}]*display:\s*none\s*!/.test(css),
+    '必须屏蔽官方抽屉遮罩，避免一次点击 toggle 两次',
+  );
+});
+
+test('DSH 0.2.2 自带开合按钮时，插件自绘的两个入口让位 —— issue #208 / #209', () => {
+  const css = readFileSync(new URL('../client/mobile/mobile.css.ts', import.meta.url), 'utf8');
+  // 0.2.2 在 frame 的 leading 座挂了官方开合按钮（button[data-sidebar-opener]，
+  // drawer 模式下每个 phase 都挂载），位置和插件自绘的 toggle 几乎重合，
+  // 再算上悬浮球同一屏有三个入口做同一件事，只留官方那个。
+  assert.ok(
+    /\[data-mobile-nav="frame"\]:has\(\[data-sidebar-opener\]\)\s*\[data-mobile-nav="toggle"\]/.test(css),
+    '官方开合按钮存在时，插件自绘的 toggle 要隐藏',
+  );
+  assert.ok(
+    /\[data-mobile-nav="frame"\]:has\(\[data-sidebar-opener\]\)\s*\[data-mobile-nav="fab"\]/.test(css),
+    '官方开合按钮存在时，插件悬浮球也要隐藏',
+  );
+  // 反过来：老宿主没有官方按钮，两个兜底入口必须留着（否则手机上打不开抽屉）。
+  // 用行首锚定，只看这两条自己的规则块 —— 否则 :has() 那条的后半个选择器
+  // 也会以 [data-mobile-nav="fab"] 结尾，被误判成「无条件隐藏」。
+  assert.ok(
+    !/(?:^|\n)[ \t]*\[data-mobile-nav="toggle"\]\s*\{[^}]*display:\s*none/.test(css)
+      && !/(?:^|\n)[ \t]*\[data-mobile-nav="fab"\]\s*\{[^}]*display:\s*none/.test(css),
+    '不能让兜底入口无条件隐藏 —— 老版本 DSH 没有官方开合按钮',
+  );
+  // 官方按钮自己调 toggleSidebar()，必须和自绘 toggle 一样豁免「点抽屉外就关」，
+  // 否则一次点击被两边各 toggle 一次，净效果是抽屉不动。
+  assert.ok(TOGGLE_SELECTOR.includes('[data-sidebar-opener]'));
 });
 
 test('移除 web-ui-all 在 frame 上的全屏 ::after 遮罩 —— issue #67', () => {
@@ -156,7 +219,18 @@ test('移除 web-ui-all 在 frame 上的全屏 ::after 遮罩 —— issue #67',
 test('打包产物里带上抽屉规则的关键字', () => {
   const bundle = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8');
   // client/client.js 是 esbuild 产物，跑测试前需先 npm run build:client
-  for (const needle of ['sessionRow', 'searchResultWorkspace', 'role="menu"', 'pointerType']) {
+  for (const needle of [
+    'sessionRow',
+    'searchResultWorkspace',
+    'role="menu"',
+    'pointerType',
+    // 0.2.2 窄屏自带抽屉修复（issue #208 / #209）：产物里必须带新的类名定位
+    // 与官方遮罩/开合按钮的处理，否则说明 bundle 没重新构建。
+    '[class*="centerCol"]',
+    '[class*="sidebarCol"]',
+    '[data-sidebar-mask]',
+    '[data-sidebar-opener]',
+  ]) {
     assert.ok(bundle.includes(needle), `打包产物缺少 "${needle}" —— 先跑 npm run build:client`);
   }
 });
