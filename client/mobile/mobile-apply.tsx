@@ -5,7 +5,7 @@ import { MobileNavOverlay } from './MobileNavOverlay.tsx'
 import { MobileDrawerFooter } from './MobileDrawerFooter.tsx'
 import { startFileGuard } from './fileGuard.ts'
 import { MOBILE_CSS } from './mobile.css.ts'
-import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT } from '../api.js'
+import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT, MOBILE_FILE_COPY_ATTRIBUTE, MOBILE_FILE_COPY_EVENT } from '../api.js'
 import { NS, en, zh } from './locales.ts'
 import type { MobileNavKey } from './locales.ts'
 import { resolveLayout, persistLayoutFromUrl } from './layout-mode.mjs'
@@ -52,15 +52,28 @@ export function mobileApply(ctx): void {
     const onChange = (event: Event): void => {
       applyEnabled((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled === true)
     }
+    // 「文件链接复制按钮」开关（默认开）镜像到 body 属性 + 事件：属性给 CSS 兜底，
+    // 事件让 fileGuard 即时启停复制按钮注入（设置页切换时由 client/index.jsx 派发）。
+    const applyFileCopy = (enabled: boolean): void => {
+      const on = enabled !== false
+      document.body?.setAttribute(MOBILE_FILE_COPY_ATTRIBUTE, on ? 'on' : 'off')
+      window.dispatchEvent(new CustomEvent(MOBILE_FILE_COPY_EVENT, { detail: { enabled: on } }))
+    }
     const load = async (): Promise<void> => {
       try {
         const result = await ctx.connection.rpc.call(POCKET_RPC_CHANNEL, POCKET_ENDPOINTS.status, {}) as {
           ok?: boolean
-          value?: { mobileRightbarEnabled?: boolean }
+          value?: { mobileRightbarEnabled?: boolean; mobileFileCopyEnabled?: boolean }
         }
-        if (active) applyEnabled(result?.ok === true ? result.value?.mobileRightbarEnabled !== false : true)
+        if (active) {
+          applyEnabled(result?.ok === true ? result.value?.mobileRightbarEnabled !== false : true)
+          applyFileCopy(result?.ok === true ? result.value?.mobileFileCopyEnabled !== false : true)
+        }
       } catch {
-        if (active) applyEnabled(true)
+        if (active) {
+          applyEnabled(true)
+          applyFileCopy(true)
+        }
       }
     }
     window.addEventListener(MOBILE_RIGHTBAR_EVENT, onChange)
@@ -324,7 +337,17 @@ export function mobileApply(ctx): void {
         POCKET_ENDPOINTS.fileRead,
         { path: filePath, cwd: getWorkspaceCwd() },
       ) as Promise<{ ok: boolean; value?: { content: string; path: string; size: number }; error?: { message: string } }>
-    return startFileGuard(readFile)
+    const guard = startFileGuard(readFile)
+    // 复制按钮开关：初始取 body 属性（默认开），设置页切换时经事件即时生效。
+    guard.setCopyEnabled(document.body?.getAttribute(MOBILE_FILE_COPY_ATTRIBUTE) !== 'off')
+    const onCopySetting = (event: Event): void => {
+      guard.setCopyEnabled((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled !== false)
+    }
+    window.addEventListener(MOBILE_FILE_COPY_EVENT, onCopySetting)
+    return () => {
+      window.removeEventListener(MOBILE_FILE_COPY_EVENT, onCopySetting)
+      guard.dispose()
+    }
   }, 'dsh-mobile-nav: file open guard + copy button + hide add-workspace (issue #17)')
 
   // 手机上模型 / 提供方设置加载失败：上游 dsh-web 会渲染「加载提供方目录失败 /

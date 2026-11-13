@@ -314,6 +314,34 @@ test('RPC：mobile.rightbar.setEnabled 默认开启并回写到 status', async (
   await service.dispose();
 });
 
+test('RPC：mobile.fileCopy.setEnabled 默认开启并回写到 status', async () => {
+  const internals = stubInternals();
+  let enabled = true;
+  const service = createPocketService({ dshPort: 3080, port: 3081, internals });
+  const conn = fakeCtxConnection();
+  installPocketRpc({ connection: conn }, {
+    service,
+    getMobileFileCopyEnabled: () => enabled,
+    setMobileFileCopyEnabled: (on) => { enabled = on === true; return enabled; },
+    log: { error() {}, warn() {} },
+  });
+
+  const initial = await conn.handler(POCKET_ENDPOINTS.status, {});
+  assert.equal(initial.ok, true);
+  assert.equal(initial.value.mobileFileCopyEnabled, true, '默认开启');
+
+  const off = await conn.handler(POCKET_ENDPOINTS.mobileFileCopySetEnabled, { on: false });
+  assert.equal(off.ok, true);
+  assert.equal(off.value.mobileFileCopyEnabled, false, '关闭成功');
+  assert.equal((await conn.handler(POCKET_ENDPOINTS.status, {})).value.mobileFileCopyEnabled, false, 'status 反映关闭');
+
+  const on = await conn.handler(POCKET_ENDPOINTS.mobileFileCopySetEnabled, { on: true });
+  assert.equal(on.ok, true);
+  assert.equal(on.value.mobileFileCopyEnabled, true, '可再次开启');
+
+  await service.dispose();
+});
+
 test('RPC：status 携带重启提示（restartNotice）', async () => {
   const internals = stubInternals();
   const service = createPocketService({ dshPort: 3080, port: 3081, internals });

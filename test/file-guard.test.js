@@ -51,3 +51,51 @@ test('CSS 隐藏「添加工作区」图标 + 复制按钮样式（窄屏）', (
   // 复制按钮样式必须存在（窄屏才注入/显示）
   assert.ok(css.includes('[data-mobile-nav="copy-file"]'), 'mobile.css.ts 必须含复制按钮样式');
 });
+
+// ---------- 文件链接复制按钮开关（默认开启） ----------
+
+test('复制按钮开关：默认开启，可动态启停；关闭时移除已注入按钮并清标记', () => {
+  // fileGuard 暴露 setCopyEnabled 句柄：设置页切换时不用重挂守卫
+  assert.ok(src.includes('export interface FileGuardHandle'), '必须定义守卫句柄类型');
+  assert.ok(src.includes('initialCopyEnabled = true'), 'startFileGuard 的复制按钮默认开启');
+  assert.ok(src.includes('setCopyEnabled'), 'fileGuard.ts 必须暴露 setCopyEnabled');
+  assert.ok(/if \(!copyEnabled\) return/.test(src), '关闭后 injectCopyButtons 必须直接跳过（MutationObserver 不再注入）');
+  assert.ok(src.includes('clearCopyButtons'), '关闭时必须清理已注入的按钮');
+  assert.ok(src.includes("removeAttribute('data-mobile-nav-copy')"), '关闭时必须清掉链接上的已处理标记（再次开启才能重新注入）');
+  assert.ok(src.includes('return { dispose, setCopyEnabled }'), '必须返回 { dispose, setCopyEnabled } 句柄');
+});
+
+test('复制按钮开关接线：mobile-apply 读属性/监听事件，index.jsx 设置页可切换', () => {
+  assert.ok(apply.includes('startFileGuard(readFile)'), '仍以 readFile 回调启动守卫');
+  assert.ok(apply.includes('MOBILE_FILE_COPY_ATTRIBUTE'), '移动端必须读 body 属性作为初始开关');
+  assert.ok(apply.includes('MOBILE_FILE_COPY_EVENT'), '移动端必须监听设置切换事件');
+  assert.ok(apply.includes('guard.setCopyEnabled'), '开关变化必须驱动 fileGuard.setCopyEnabled');
+  assert.ok(apply.includes('mobileFileCopyEnabled'), '启动时必须从 status RPC 读取开关值');
+  assert.ok(apply.includes('guard.dispose()'), '卸载时必须清理守卫');
+
+  const settingsUi = readFileSync(new URL('../client/index.jsx', import.meta.url), 'utf8');
+  assert.ok(settingsUi.includes('applyMobileFileCopySetting'), '设置页必须应用开关（body 属性 + 事件）');
+  assert.ok(settingsUi.includes('MOBILE_FILE_COPY_EVENT'), '设置页切换后必须派发事件');
+  assert.ok(settingsUi.includes('mobileFileCopySetEnabled'), '设置页必须调用 host RPC 持久化开关');
+  assert.ok(settingsUi.includes("t('mobileFileCopy')"), '设置页必须有开关行文案');
+  assert.ok(settingsUi.includes('applyMobileFileCopySetting(s.mobileFileCopyEnabled)'), '打开设置页时必须同步当前值');
+});
+
+test('CSS 兜底：开关关闭时隐藏复制按钮', () => {
+  assert.ok(
+    css.includes('body[data-dsh-pocket-file-copy="off"] [data-mobile-nav="copy-file"]'),
+    'CSS 必须兜底隐藏已注入的复制按钮（设置页关闭后立即不显示）',
+  );
+});
+
+test('打包产物含复制按钮开关接线', () => {
+  for (const needle of [
+    'data-dsh-pocket-file-copy',
+    'dsh-pocket:file-copy',
+    'mobile.fileCopy.setEnabled',
+    'mobileFileCopyEnabled',
+    'setCopyEnabled',
+  ]) {
+    assert.ok(bundle.includes(needle), `产物缺少 "${needle}" —— 先跑 npm run build:client`);
+  }
+});

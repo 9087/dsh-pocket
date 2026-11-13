@@ -58,9 +58,18 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** startFileGuard 返回的句柄：dispose 清理副作用，setCopyEnabled 动态开关复制按钮。 */
+export interface FileGuardHandle {
+  dispose: () => void
+  setCopyEnabled: (on: boolean) => void
+}
+
 export function startFileGuard(
   readFile: (path: string) => Promise<ReadFileResponse>,
-): () => void {
+  initialCopyEnabled = true,
+): FileGuardHandle {
+  // 「复制」按钮开关（默认开）：设置页切换时经 setCopyEnabled 即时生效。
+  let copyEnabled = initialCopyEnabled !== false
   // 轻量 toast：自包含，不依赖 dsh-pocket 面板的 React 状态。
   let toastEl: HTMLElement | null = null
   let toastTimer: number | null = null
@@ -118,6 +127,7 @@ export function startFileGuard(
   // 用 data-mobile-nav-copy 标记已处理的链接，避免重复注入；React 重渲染会
   // 产生新元素（无标记），MutationObserver 重新补上按钮。
   const injectCopyButtons = (): void => {
+    if (!copyEnabled) return
     const links = document.querySelectorAll('button, a')
     links.forEach((el) => {
       if (el.getAttribute('data-mobile-nav-copy') === '1') return
@@ -158,6 +168,19 @@ export function startFileGuard(
       el.parentElement?.insertBefore(btn, el.nextSibling)
     })
   }
+  // 关闭开关：移除已注入的按钮并清掉链接上的标记（再次开启时重新注入）。
+  const clearCopyButtons = (): void => {
+    document.querySelectorAll('[data-mobile-nav="copy-file"]').forEach((el) => el.remove())
+    document.querySelectorAll('[data-mobile-nav-copy="1"]').forEach((el) => el.removeAttribute('data-mobile-nav-copy'))
+  }
+  const setCopyEnabled = (on: boolean): void => {
+    const next = on !== false
+    if (next === copyEnabled) return
+    copyEnabled = next
+    if (copyEnabled) injectCopyButtons()
+    else clearCopyButtons()
+  }
+
   injectCopyButtons()
   const copyObserver = new MutationObserver(() => injectCopyButtons())
   copyObserver.observe(document.body, { childList: true, subtree: true })
@@ -190,11 +213,14 @@ export function startFileGuard(
   }
   const disconnectWs = hideWsEntries()
 
-  return () => {
+  const dispose = (): void => {
     document.removeEventListener('click', onClick, true)
     copyObserver.disconnect()
+    clearCopyButtons()
     disconnectWs()
     if (toastTimer !== null) window.clearTimeout(toastTimer)
     toastEl?.remove()
   }
+
+  return { dispose, setCopyEnabled }
 }

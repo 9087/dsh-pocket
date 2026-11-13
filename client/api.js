@@ -2,6 +2,10 @@
 export const POCKET_RPC_CHANNEL = '/dsh-pocket';
 export const MOBILE_RIGHTBAR_ATTRIBUTE = 'data-dsh-pocket-mobile-rightbar';
 export const MOBILE_RIGHTBAR_EVENT = 'dsh-pocket:mobile-rightbar';
+// 手机端文件链接「复制」按钮开关（默认开）：body 属性给 CSS 兜底，
+// 事件让已挂载的移动端组件即时响应设置页切换。
+export const MOBILE_FILE_COPY_ATTRIBUTE = 'data-dsh-pocket-file-copy';
+export const MOBILE_FILE_COPY_EVENT = 'dsh-pocket:file-copy';
 
 export const POCKET_ENDPOINTS = Object.freeze({
   status: 'pocket.status',
@@ -16,6 +20,7 @@ export const POCKET_ENDPOINTS = Object.freeze({
   lanSetOverride: 'lan.setOverride',
   lanSetEnabled: 'lan.setEnabled',
   mobileRightbarSetEnabled: 'mobile.rightbar.setEnabled',
+  mobileFileCopySetEnabled: 'mobile.fileCopy.setEnabled',
   pinSetCustom: 'pin.setCustom',
   pocketReset: 'pocket.reset',
   // 移动端「复制文件内容」（issue #17）：手机经此 RPC 让主机读取文件正文，

@@ -53,6 +53,8 @@ var import_react2 = require("react");
 var POCKET_RPC_CHANNEL = "/dsh-pocket";
 var MOBILE_RIGHTBAR_ATTRIBUTE = "data-dsh-pocket-mobile-rightbar";
 var MOBILE_RIGHTBAR_EVENT = "dsh-pocket:mobile-rightbar";
+var MOBILE_FILE_COPY_ATTRIBUTE = "data-dsh-pocket-file-copy";
+var MOBILE_FILE_COPY_EVENT = "dsh-pocket:file-copy";
 var POCKET_ENDPOINTS = Object.freeze({
   status: "pocket.status",
   tunnelStart: "tunnel.start",
@@ -66,6 +68,7 @@ var POCKET_ENDPOINTS = Object.freeze({
   lanSetOverride: "lan.setOverride",
   lanSetEnabled: "lan.setEnabled",
   mobileRightbarSetEnabled: "mobile.rightbar.setEnabled",
+  mobileFileCopySetEnabled: "mobile.fileCopy.setEnabled",
   pinSetCustom: "pin.setCustom",
   pocketReset: "pocket.reset",
   // 移动端「复制文件内容」（issue #17）：手机经此 RPC 让主机读取文件正文，
@@ -514,7 +517,8 @@ async function copyText(text) {
     return false;
   }
 }
-function startFileGuard(readFile) {
+function startFileGuard(readFile, initialCopyEnabled = true) {
+  let copyEnabled = initialCopyEnabled !== false;
   let toastEl = null;
   let toastTimer = null;
   const showToast = (text) => {
@@ -564,6 +568,7 @@ function startFileGuard(readFile) {
   };
   document.addEventListener("click", onClick, true);
   const injectCopyButtons = () => {
+    if (!copyEnabled) return;
     const links = document.querySelectorAll("button, a");
     links.forEach((el) => {
       if (el.getAttribute("data-mobile-nav-copy") === "1") return;
@@ -604,6 +609,17 @@ function startFileGuard(readFile) {
       el.parentElement?.insertBefore(btn, el.nextSibling);
     });
   };
+  const clearCopyButtons = () => {
+    document.querySelectorAll('[data-mobile-nav="copy-file"]').forEach((el) => el.remove());
+    document.querySelectorAll('[data-mobile-nav-copy="1"]').forEach((el) => el.removeAttribute("data-mobile-nav-copy"));
+  };
+  const setCopyEnabled = (on) => {
+    const next = on !== false;
+    if (next === copyEnabled) return;
+    copyEnabled = next;
+    if (copyEnabled) injectCopyButtons();
+    else clearCopyButtons();
+  };
   injectCopyButtons();
   const copyObserver = new MutationObserver(() => injectCopyButtons());
   copyObserver.observe(document.body, { childList: true, subtree: true });
@@ -632,13 +648,15 @@ function startFileGuard(readFile) {
     return () => observer.disconnect();
   };
   const disconnectWs = hideWsEntries();
-  return () => {
+  const dispose = () => {
     document.removeEventListener("click", onClick, true);
     copyObserver.disconnect();
+    clearCopyButtons();
     disconnectWs();
     if (toastTimer !== null) window.clearTimeout(toastTimer);
     toastEl?.remove();
   };
+  return { dispose, setCopyEnabled };
 }
 
 // client/mobile/mobile.css.ts
@@ -1661,6 +1679,10 @@ var MOBILE_CSS = `
     opacity: .55 !important;
     cursor: default !important;
   }
+  /* \u8BBE\u7F6E\u9875\u5173\u95ED\u300C\u6587\u4EF6\u94FE\u63A5\u590D\u5236\u6309\u94AE\u300D\u65F6\u515C\u5E95\u9690\u85CF\uFF08\u6B63\u5E38\u60C5\u51B5\u4E0B JS \u4F1A\u76F4\u63A5\u79FB\u9664\u6309\u94AE\uFF09\u3002 */
+  body[data-dsh-pocket-file-copy="off"] [data-mobile-nav="copy-file"] {
+    display: none !important;
+  }
 }
 
 /* ---------- mobile: stop iOS Safari forced zoom on input focus ----------
@@ -1685,6 +1707,7 @@ var MOBILE_CSS = `
   [data-mobile-nav="backdrop"],
   [data-mobile-nav="session-log"],
   [data-mobile-nav="explorer"],
+  [data-mobile-nav="copy-file"],
   [data-mobile-nav="drawer-actions"] {
     display: none !important;
   }
@@ -1756,12 +1779,23 @@ function mobileApply(ctx) {
     const onChange = (event) => {
       applyEnabled(event.detail?.enabled === true);
     };
+    const applyFileCopy = (enabled) => {
+      const on = enabled !== false;
+      document.body?.setAttribute(MOBILE_FILE_COPY_ATTRIBUTE, on ? "on" : "off");
+      window.dispatchEvent(new CustomEvent(MOBILE_FILE_COPY_EVENT, { detail: { enabled: on } }));
+    };
     const load = async () => {
       try {
         const result = await ctx.connection.rpc.call(POCKET_RPC_CHANNEL, POCKET_ENDPOINTS.status, {});
-        if (active) applyEnabled(result?.ok === true ? result.value?.mobileRightbarEnabled !== false : true);
+        if (active) {
+          applyEnabled(result?.ok === true ? result.value?.mobileRightbarEnabled !== false : true);
+          applyFileCopy(result?.ok === true ? result.value?.mobileFileCopyEnabled !== false : true);
+        }
       } catch {
-        if (active) applyEnabled(true);
+        if (active) {
+          applyEnabled(true);
+          applyFileCopy(true);
+        }
       }
     };
     window.addEventListener(MOBILE_RIGHTBAR_EVENT, onChange);
@@ -1951,7 +1985,16 @@ function mobileApply(ctx) {
       POCKET_ENDPOINTS.fileRead,
       { path: filePath, cwd: getWorkspaceCwd() }
     );
-    return startFileGuard(readFile);
+    const guard = startFileGuard(readFile);
+    guard.setCopyEnabled(document.body?.getAttribute(MOBILE_FILE_COPY_ATTRIBUTE) !== "off");
+    const onCopySetting = (event) => {
+      guard.setCopyEnabled(event.detail?.enabled !== false);
+    };
+    window.addEventListener(MOBILE_FILE_COPY_EVENT, onCopySetting);
+    return () => {
+      window.removeEventListener(MOBILE_FILE_COPY_EVENT, onCopySetting);
+      guard.dispose();
+    };
   }, "dsh-mobile-nav: file open guard + copy button + hide add-workspace (issue #17)");
   ctx.effect(() => {
     if (!narrow.matches) return () => {
@@ -2077,6 +2120,8 @@ var zh2 = {
   "lanStarting": "\u4EE3\u7406\u672A\u5C31\u7EEA\u2026",
   "mobileRightbar": "\u624B\u673A\u7AEF\u53F3\u8FB9\u680F",
   "mobileRightbarHint": "\u663E\u793A\u539F\u751F\u53F3\u8FB9\u680F\u5165\u53E3\uFF1B\u666E\u901A\u624B\u673A\u53EF\u6309\u9700\u5173\u95ED\uFF0C\u6298\u53E0\u5C4F\u5C55\u5F00\u540E\u4F7F\u7528\u66F4\u65B9\u4FBF",
+  "mobileFileCopy": "\u6587\u4EF6\u94FE\u63A5\u590D\u5236\u6309\u94AE",
+  "mobileFileCopyHint": "\u5728\u624B\u673A\u7AEF\u7684\u6587\u4EF6\u94FE\u63A5\u65C1\u663E\u793A\u300C\u590D\u5236\u300D\u6309\u94AE\uFF1A\u70B9\u5B83\u8BFB\u53D6\u7535\u8111\u4E0A\u7684\u6587\u4EF6\u5185\u5BB9\u5E76\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u4E0D\u9700\u8981\u53EF\u4EE5\u5173\u95ED\uFF08\u5173\u95ED\u540E\u70B9\u6587\u4EF6\u94FE\u63A5\u4ECD\u4F1A\u63D0\u793A\uFF09",
   "wanTitle": "\u{1F310} \u516C\u7F51\uFF08\u4EBA\u5728\u5916\u9762\uFF09",
   "wanHint": "\u4EFB\u4F55\u7F51\u7EDC\u626B\u7801\u5373\u7528\uFF08URL \u6BCF\u6B21\u91CD\u542F\u81EA\u52A8\u6362\u65B0\uFF09",
   "wanPin": "\u{1F510} \u8BBF\u95EE\u5BC6\u7801\uFF1A{pin}\uFF08\u6BCF\u6B21\u5F00\u542F\u516C\u7F51\u53D8\u65B0\uFF1B\u624B\u673A\u6253\u5F00\u94FE\u63A5\u9700\u8F93\u5165\u6B64\u5BC6\u7801\uFF09",
@@ -2175,6 +2220,8 @@ var en2 = {
   "lanStarting": "Proxy starting\u2026",
   "mobileRightbar": "Mobile right sidebar",
   "mobileRightbarHint": "Show the native right-sidebar entry; disable it for a compact phone header or keep it on for an unfolded display",
+  "mobileFileCopy": "File-link copy button",
+  "mobileFileCopyHint": "Show a Copy button next to file links on phones: it reads the file on your computer and copies its content to the clipboard. Turn it off if you do not need it (tapping a file link still shows a notice)",
   "wanTitle": "\u{1F310} Anywhere (public)",
   "wanHint": "Scan from any network (the URL changes on every restart)",
   "wanPin": "\u{1F510} PIN: {pin} (changes each time the tunnel is enabled; required on the phone)",
@@ -2238,6 +2285,11 @@ function applyMobileRightbarSetting(enabled) {
   document.body?.setAttribute(MOBILE_RIGHTBAR_ATTRIBUTE, on ? "on" : "off");
   window.dispatchEvent(new CustomEvent(MOBILE_RIGHTBAR_EVENT, { detail: { enabled: on } }));
 }
+function applyMobileFileCopySetting(enabled) {
+  const on = enabled !== false;
+  document.body?.setAttribute(MOBILE_FILE_COPY_ATTRIBUTE, on ? "on" : "off");
+  window.dispatchEvent(new CustomEvent(MOBILE_FILE_COPY_EVENT, { detail: { enabled: on } }));
+}
 function PocketSettingsTab({ rpcCall, t }) {
   const [status, setStatus] = (0, import_react2.useState)(null);
   const [busy, setBusy] = (0, import_react2.useState)(false);
@@ -2262,6 +2314,7 @@ function PocketSettingsTab({ rpcCall, t }) {
       const s = await call(POCKET_ENDPOINTS.status, {});
       setStatus(s);
       applyMobileRightbarSetting(s.mobileRightbarEnabled);
+      applyMobileFileCopySetting(s.mobileFileCopyEnabled);
       setTunnelState(s.tunnelState ?? null);
       if (s.desktop) setIsDesktop(true);
       if (s.restartNotice) {
@@ -2411,6 +2464,7 @@ function PocketSettingsTab({ rpcCall, t }) {
       const next = await call(POCKET_ENDPOINTS.pocketReset, { confirm: true });
       setStatus(next);
       applyMobileRightbarSetting(next.mobileRightbarEnabled);
+      applyMobileFileCopySetting(next.mobileFileCopyEnabled);
       setTunnelCfg(null);
       setCustomPin(null);
       setAdvOpen(false);
@@ -2442,6 +2496,16 @@ function PocketSettingsTab({ rpcCall, t }) {
       const enabled = r.mobileRightbarEnabled === true;
       setStatus((s) => ({ ...s, mobileRightbarEnabled: enabled }));
       applyMobileRightbarSetting(enabled);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const setMobileFileCopy = async (on) => {
+    try {
+      const r = await call(POCKET_ENDPOINTS.mobileFileCopySetEnabled, { on });
+      const enabled = r.mobileFileCopyEnabled === true;
+      setStatus((s) => ({ ...s, mobileFileCopyEnabled: enabled }));
+      applyMobileFileCopySetting(enabled);
     } catch (err) {
       setError(err.message);
     }
@@ -2797,6 +2861,11 @@ function PocketSettingsTab({ rpcCall, t }) {
         t("mobileRightbar"),
         Switch(status?.mobileRightbarEnabled !== false, () => setMobileRightbar(status?.mobileRightbarEnabled === false)),
         (0, import_react2.createElement)("div", { style: { ...styles.muted, marginTop: 6 } }, t("mobileRightbarHint"))
+      ),
+      row(
+        t("mobileFileCopy"),
+        Switch(status?.mobileFileCopyEnabled !== false, () => setMobileFileCopy(status?.mobileFileCopyEnabled === false)),
+        (0, import_react2.createElement)("div", { style: { ...styles.muted, marginTop: 6 } }, t("mobileFileCopyHint"))
       )
     ),
     error ? (0, import_react2.createElement)("div", { style: { color: "var(--dsw-alias-state-error-primary,#dc2626)", fontSize: 12, marginTop: 8 } }, `\u274C ${errText(error)}`) : null,

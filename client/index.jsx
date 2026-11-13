@@ -9,7 +9,7 @@
 
 import { createElement as h, useEffect, useRef, useState } from 'react';
 
-import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT, redactStatus, compareVersions } from './api.js';
+import { POCKET_RPC_CHANNEL, POCKET_ENDPOINTS, MOBILE_RIGHTBAR_ATTRIBUTE, MOBILE_RIGHTBAR_EVENT, MOBILE_FILE_COPY_ATTRIBUTE, MOBILE_FILE_COPY_EVENT, redactStatus, compareVersions } from './api.js';
 import { mobileApply } from './mobile/mobile-apply.tsx';
 import { NS as POCKET_NS, zh as POCKET_ZH, en as POCKET_EN } from './pocket-locales.js';
 
@@ -50,6 +50,12 @@ function applyMobileRightbarSetting(enabled) {
   window.dispatchEvent(new CustomEvent(MOBILE_RIGHTBAR_EVENT, { detail: { enabled: on } }));
 }
 
+function applyMobileFileCopySetting(enabled) {
+  const on = enabled !== false;
+  document.body?.setAttribute(MOBILE_FILE_COPY_ATTRIBUTE, on ? 'on' : 'off');
+  window.dispatchEvent(new CustomEvent(MOBILE_FILE_COPY_EVENT, { detail: { enabled: on } }));
+}
+
 function PocketSettingsTab({ rpcCall, t }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +84,7 @@ function PocketSettingsTab({ rpcCall, t }) {
       const s = await call(POCKET_ENDPOINTS.status, {});
       setStatus(s);
       applyMobileRightbarSetting(s.mobileRightbarEnabled);
+      applyMobileFileCopySetting(s.mobileFileCopyEnabled);
       setTunnelState(s.tunnelState ?? null);
       if (s.desktop) setIsDesktop(true);
       if (s.restartNotice) {
@@ -238,6 +245,7 @@ function PocketSettingsTab({ rpcCall, t }) {
       const next = await call(POCKET_ENDPOINTS.pocketReset, { confirm: true });
       setStatus(next);
       applyMobileRightbarSetting(next.mobileRightbarEnabled);
+      applyMobileFileCopySetting(next.mobileFileCopyEnabled);
       setTunnelCfg(null);
       setCustomPin(null);
       setAdvOpen(false);
@@ -272,6 +280,19 @@ function PocketSettingsTab({ rpcCall, t }) {
       const enabled = r.mobileRightbarEnabled === true;
       setStatus((s) => ({ ...s, mobileRightbarEnabled: enabled }));
       applyMobileRightbarSetting(enabled);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // 手机端文件链接「复制」按钮开关（默认开启）：关闭后不再注入复制按钮，
+  // 点文件链接仍会弹「手机上无法直接打开」提示。
+  const setMobileFileCopy = async (on) => {
+    try {
+      const r = await call(POCKET_ENDPOINTS.mobileFileCopySetEnabled, { on });
+      const enabled = r.mobileFileCopyEnabled === true;
+      setStatus((s) => ({ ...s, mobileFileCopyEnabled: enabled }));
+      applyMobileFileCopySetting(enabled);
     } catch (err) {
       setError(err.message);
     }
@@ -581,6 +602,11 @@ function PocketSettingsTab({ rpcCall, t }) {
         t('mobileRightbar'),
         Switch(status?.mobileRightbarEnabled !== false, () => setMobileRightbar(status?.mobileRightbarEnabled === false)),
         h('div', { style: { ...styles.muted, marginTop: 6 } }, t('mobileRightbarHint')),
+      ),
+      row(
+        t('mobileFileCopy'),
+        Switch(status?.mobileFileCopyEnabled !== false, () => setMobileFileCopy(status?.mobileFileCopyEnabled === false)),
+        h('div', { style: { ...styles.muted, marginTop: 6 } }, t('mobileFileCopyHint')),
       ),
     ),
 

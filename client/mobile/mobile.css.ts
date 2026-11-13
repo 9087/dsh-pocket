@@ -1032,6 +1032,10 @@ export const MOBILE_CSS = `
     opacity: .55 !important;
     cursor: default !important;
   }
+  /* 设置页关闭「文件链接复制按钮」时兜底隐藏（正常情况下 JS 会直接移除按钮）。 */
+  body[data-dsh-pocket-file-copy="off"] [data-mobile-nav="copy-file"] {
+    display: none !important;
+  }
 }
 
 /* ---------- mobile: stop iOS Safari forced zoom on input focus ----------
@@ -1056,6 +1060,7 @@ export const MOBILE_CSS = `
   [data-mobile-nav="backdrop"],
   [data-mobile-nav="session-log"],
   [data-mobile-nav="explorer"],
+  [data-mobile-nav="copy-file"],
   [data-mobile-nav="drawer-actions"] {
     display: none !important;
   }
